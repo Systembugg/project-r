@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Riko AI Companion</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #090b10;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Top Header */
+    .top-header {
+      height: 58px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      background: rgba(15, 18, 25, 0.85);
+      backdrop-filter: blur(16px);
+      z-index: 10;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+    }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f3f4f6;
+      letter-spacing: 0.4px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+    .status-tag {
+      font-size: 13px;
+      color: #9ca3af;
+    }
+    /* Main Content Container */
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    /* Glowing Audio Orb */
+    .orb-section {
+      padding: 32px 0 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .voice-orb {
+      width: 100px;
+      height: 100px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .orb-core {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      box-shadow: 0 0 30px rgba(168, 85, 247, 0.5);
+      transition: all 0.3s ease;
+      z-index: 2;
+    }
+    .orb-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      pointer-events: none;
+      transition: all 0.3s ease;
+    }
+    .ring-1 { width: 76px; height: 76px; }
+    .ring-2 { width: 100px; height: 100px; }
+
+    .voice-orb.speaking .orb-core {
+      transform: scale(1.18);
+      background: linear-gradient(135deg, #ec4899, #8b5cf6);
+      box-shadow: 0 0 45px rgba(236, 72, 153, 0.8);
+      animation: pulse 1s infinite alternate;
+    }
+    .voice-orb.speaking .ring-1 {
+      border-color: rgba(236, 72, 153, 0.6);
+      animation: ripple 1.4s infinite ease-out;
+    }
+    .voice-orb.speaking .ring-2 {
+      border-color: rgba(139, 92, 246, 0.45);
+      animation: ripple 1.4s infinite ease-out 0.4s;
+    }
+    .voice-orb.recording .orb-core {
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      box-shadow: 0 0 45px rgba(239, 68, 68, 0.8);
+      animation: pulse 0.7s infinite alternate;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.22); }
+    }
+    @keyframes ripple {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      100% { transform: scale(1.55); opacity: 0; }
+    }
+    .orb-status {
+      margin-top: 12px;
+      font-size: 13.5px;
+      color: #9ca3af;
+      letter-spacing: 0.2px;
+    }
+
+    /* Chat Messages Stream */
+    .chat-stream {
+      flex: 1;
+      width: 100%;
+      overflow-y: auto;
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .chat-stream::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-stream::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+    }
+    .msg-bubble {
+      max-width: 82%;
+      padding: 12px 18px;
+      border-radius: 14px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      animation: fadeIn 0.25s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg-bot {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #f3f4f6;
+      border-bottom-left-radius: 4px;
+    }
+    .msg-user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+    .msg-sender {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #c084fc;
+      margin-bottom: 4px;
+      letter-spacing: 0.3px;
+    }
+    .msg-user .msg-sender { display: none; }
+
+    /* Bottom Bar */
+    .bottom-bar {
+      padding: 16px 20px 24px;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      background: linear-gradient(to top, rgba(9, 11, 16, 1) 60%, transparent);
+      flex-shrink: 0;
+    }
+    .input-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 760px;
+      background: rgba(22, 27, 38, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 8px 10px 8px 16px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+      transition: border-color 0.2s;
+    }
+    .input-box:focus-within {
+      border-color: rgba(168, 85, 247, 0.5);
+    }
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 14.5px;
+    }
+    .chat-input::placeholder { color: #6b7280; }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .icon-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .mic-btn.active {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.2);
+      animation: pulse 1s infinite alternate;
+    }
+    .send-btn:hover { color: #a855f7; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="top-header">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <span class="brand-title">Riko AI</span>
+      <span class="badge">Voice & Text</span>
+    </div>
+    <div class="status-tag" id="status-tag">Online</div>
+  </header>
+
+  <!-- Main Area -->
+  <main class="main-container">
+    <!-- Glowing Audio Pulse Orb -->
+    <div class="orb-section">
+      <div class="voice-orb" id="voice-orb">
+        <div class="orb-core"></div>
+        <div class="orb-ring ring-1"></div>
+        <div class="orb-ring ring-2"></div>
+      </div>
+      <div class="orb-status" id="orb-status">Idle</div>
+    </div>
+
+    <!-- Chat Messages Stream -->
+    <div class="chat-stream" id="chat-stream">
+      <div class="msg-bubble msg-bot">
+        <div class="msg-sender">Riko</div>
+        <div class="msg-text">Look who finally decided to show up. What do you want?</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Input Bar -->
+  <footer class="bottom-bar">
+    <div class="input-box">
+      <button class="icon-btn mic-btn" id="mic-btn" title="Push to Talk">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+      </button>
+      <input type="text" class="chat-input" id="chat-input" placeholder="Type or click mic to talk to Riko..." autofocus />
+      <button class="icon-btn send-btn" id="send-btn" title="Send message">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+  </footer>
+
+  <script src="app.js?v=6"></script>
+</body>
+</html>

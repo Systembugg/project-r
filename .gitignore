@@ -1,0 +1,33 @@
+# Virtual Environment & Python Cache
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Secret / Configuration Keys
+.env
+*.env.local
+
+# Generated Audio Files & Cache (Private Local Storage)
+audio/
+output.wav
+*.wav.reformatted.wav
+character_files/raw_audio/
+character_files/slices/*
+!character_files/slices/riko_clean_vocal.wav
+chat_history.json
+
+# Keep clean reference vocal slice for reproduction
+!character_files/main_sample.wav
+
+# OS & Editor Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
