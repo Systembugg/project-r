@@ -142,9 +142,9 @@ export default class VRMCompanionController {
     // ---- blink state machine ----
     this._blink = {
       value: 0,          // current lid closure 0..1
-      timer: 0,          // countdown to next blink
+      timer: this._randRange(2.5, 4.5), // start with eyes open
       phase: 'idle',     // 'idle' | 'closing' | 'opening'
-      next: this._randRange(2, 6),
+      next: this._randRange(2.5, 5.5),
       doublePending: false,
     };
 
@@ -352,23 +352,24 @@ export default class VRMCompanionController {
     this._rotateBone('chest',      -breath * 0.026, 0, 0);
     this._rotateBone('upperChest', -breath * 0.018, 0, 0);
 
-    // natural resting arm pose (brings arms from stiff T-pose down to relaxed posture)
+    // natural resting arm pose (brings arms from stiff T-pose down to relaxed posture at sides)
     if (this.cfg.armRelaxation) {
       const armSway = this.nSwayY.at(t * 0.16) * 0.025;
-      this._rotateBone('leftUpperArm',  0.08, 0, -1.25 + armSway);
-      this._rotateBone('rightUpperArm', 0.08, 0,  1.25 - armSway);
-      this._rotateBone('leftLowerArm',  0, -0.25, 0.15);
-      this._rotateBone('rightLowerArm', 0,  0.25, -0.15);
+      // In VRM 0.0, +Z lowers left arm down to hip, -Z lowers right arm down to hip
+      this._rotateBone('leftUpperArm',  0.06, 0,  1.26 - armSway);
+      this._rotateBone('rightUpperArm', 0.06, 0, -1.26 + armSway);
+      this._rotateBone('leftLowerArm',  0, -0.20,  0.08);
+      this._rotateBone('rightLowerArm', 0,  0.20, -0.08);
     }
 
     // shoulders/upper arms subtly abduct as the chest rises (breathing)
-    this._rotateBone('rightUpperArm', 0, 0, -breath * 0.030);
-    this._rotateBone('leftUpperArm',  0, 0,  breath * 0.030);
+    this._rotateBone('leftUpperArm',  0, 0, -breath * 0.025);
+    this._rotateBone('rightUpperArm', 0, 0,  breath * 0.025);
 
     // subtle natural wrist & hand micro-adjustments
     const handMicro = this.nSwayX.at(t * 0.22) * 0.035;
     const handMicroY = this.nBreath.at(t * 0.28) * 0.025;
-    this._rotateBone('rightHand', handMicro * 0.4, handMicroY, -handMicro);
+    this._rotateBone('rightHand', handMicro * 0.4,  handMicroY, -handMicro);
     this._rotateBone('leftHand',  handMicro * 0.4, -handMicroY,  handMicro);
 
     // --- weight-shift sway: slow organic noise on hips + counter on spine
