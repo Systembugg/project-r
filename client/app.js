@@ -12,6 +12,7 @@ const micBtn = document.getElementById('mic-btn');
 const btnRiko = document.getElementById('btn-riko');
 const btnFurina = document.getElementById('btn-furina');
 const btnResetCam = document.getElementById('btn-reset-cam');
+const voiceSelect = document.getElementById('voice-select');
 const loadingChip = document.getElementById('loading-chip');
 const loadingChipText = document.getElementById('loading-chip-text');
 
@@ -23,6 +24,7 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let activeModelKey = 'riko';
+let currentVoiceId = localStorage.getItem('riko_voice_id') || 'af_sky';
 let subtitleFadeTimer = null;
 let subtitleAnimFrame = null;
 
@@ -384,6 +386,105 @@ function detectEmotion(text) {
 }
 
 // ---------------------------------------------------------------------------
+// 5.5 Voice Selector Initialization (All Kokoro Voices & Riko Clone)
+// ---------------------------------------------------------------------------
+async function initVoiceSelector() {
+  if (!voiceSelect) return;
+
+  try {
+    const res = await fetch('/api/voices');
+    if (!res.ok) throw new Error('Failed to fetch voices');
+    const data = await res.json();
+    const voices = data.voices || [];
+
+    const categoryOrder = [
+      'Original Clones',
+      'American Female',
+      'British Female',
+      'Japanese',
+      'Hindi',
+      'American Male',
+      'British Male',
+      'International',
+      'Other'
+    ];
+
+    const grouped = {};
+    voices.forEach((v) => {
+      const cat = v.category || 'Other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(v);
+    });
+
+    voiceSelect.innerHTML = '';
+
+    categoryOrder.forEach((cat) => {
+      if (grouped[cat] && grouped[cat].length > 0) {
+        const groupEl = document.createElement('optgroup');
+        groupEl.label = cat;
+        grouped[cat].forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name;
+          groupEl.appendChild(opt);
+        });
+        voiceSelect.appendChild(groupEl);
+      }
+    });
+
+    Object.keys(grouped).forEach((cat) => {
+      if (!categoryOrder.includes(cat) && grouped[cat].length > 0) {
+        const groupEl = document.createElement('optgroup');
+        groupEl.label = cat;
+        grouped[cat].forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          opt.textContent = v.name;
+          groupEl.appendChild(opt);
+        });
+        voiceSelect.appendChild(groupEl);
+      }
+    });
+
+    const exists = voices.some((v) => v.id === currentVoiceId);
+    if (exists) {
+      voiceSelect.value = currentVoiceId;
+    } else if (voices.length > 0) {
+      currentVoiceId = data.active || voices[0].id;
+      voiceSelect.value = currentVoiceId;
+    }
+
+    voiceSelect.addEventListener('change', async () => {
+      currentVoiceId = voiceSelect.value;
+      localStorage.setItem('riko_voice_id', currentVoiceId);
+      console.log('Switched voice to:', currentVoiceId);
+      try {
+        await fetch('/api/set_voice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice_id: currentVoiceId }),
+        });
+      } catch (e) {
+        console.warn('Failed to sync active voice to backend:', e);
+      }
+    });
+  } catch (err) {
+    console.error('Error loading voices:', err);
+    voiceSelect.innerHTML = `
+      <optgroup label="Fast Anime Voices">
+        <option value="af_sky">Sky (High-Energy Anime)</option>
+        <option value="af_bella">Bella (Sassy Tsundere)</option>
+        <option value="af_heart">Heart (Warm & Sweet)</option>
+      </optgroup>
+      <optgroup label="Original Clones">
+        <option value="riko">Riko (Authentic Clone - GPT-SoVITS)</option>
+      </optgroup>
+    `;
+    voiceSelect.value = currentVoiceId;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 6. Dialogue Interaction (Send Message)
 // ---------------------------------------------------------------------------
 async function sendMessage() {
@@ -400,7 +501,7 @@ async function sendMessage() {
     const res = await fetch('/api/text_chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, voice_id: MODELS[activeModelKey].voiceId }),
+      body: JSON.stringify({ message: text, voice_id: currentVoiceId }),
     });
 
     const data = await res.json();
@@ -446,7 +547,7 @@ micBtn.addEventListener('click', async () => {
         const blob = new Blob(audioChunks, { type: 'audio/wav' });
         const form = new FormData();
         form.append('audio_file', blob, 'mic.wav');
-        form.append('voice_id', MODELS[activeModelKey].voiceId);
+        form.append('voice_id', currentVoiceId);
 
         try {
           const res = await fetch('/api/chat', { method: 'POST', body: form });
@@ -497,3 +598,4 @@ btnFurina?.addEventListener('click', () => {
 // 9. Initial Load
 // ---------------------------------------------------------------------------
 loadModel('riko');
+initVoiceSelector();

@@ -52,11 +52,72 @@
       display: block;
     }
 
-    /* Discreet Model Switcher (Top-Right) */
-    .model-toggle {
+    /* Top Controls Bar (Top-Right: Voice Selector + Model Switcher + Cam Reset) */
+    .top-controls {
       position: absolute;
       top: 18px;
       right: 22px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
+    }
+
+    .voice-selector-capsule {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(229, 231, 235, 0.85);
+      padding: 4px 12px;
+      border-radius: 999px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s ease;
+    }
+
+    .voice-selector-capsule:hover, .voice-selector-capsule:focus-within {
+      background: rgba(255, 255, 255, 0.95);
+      border-color: rgba(236, 72, 153, 0.45);
+      box-shadow: 0 4px 16px rgba(236, 72, 153, 0.12);
+    }
+
+    .voice-selector-icon {
+      color: #ec4899;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .voice-select {
+      border: none;
+      background: transparent;
+      outline: none;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      cursor: pointer;
+      padding-right: 4px;
+      max-width: 230px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .voice-select optgroup {
+      font-weight: 700;
+      color: #111827;
+      background: #ffffff;
+    }
+
+    .voice-select option {
+      font-weight: 500;
+      color: #374151;
+      background: #ffffff;
+      padding: 5px;
+    }
+
+    .model-toggle {
       display: flex;
       gap: 3px;
       background: rgba(255, 255, 255, 0.72);
@@ -66,7 +127,6 @@
       padding: 3px;
       border-radius: 999px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
-      z-index: 10;
     }
 
     .model-chip {
@@ -261,16 +321,31 @@
     <span id="loading-chip-text">Loading Riko...</span>
   </div>
 
-  <!-- Discreet Model Switcher & Camera Reset Pill -->
-  <div class="model-toggle">
-    <button id="btn-riko" class="model-chip active" data-model="riko">Riko</button>
-    <button id="btn-furina" class="model-chip" data-model="furina">Furina</button>
-    <button id="btn-reset-cam" class="model-chip" title="Reset Camera View (Drag left-click to rotate, right-click to pan, scroll to zoom)" style="padding: 5px 8px; display: inline-flex; align-items: center;">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-        <path d="M3 3v5h5"></path>
-      </svg>
-    </button>
+  <!-- Top Controls: Voice Dropdown & Model Switcher & Camera Reset -->
+  <div class="top-controls">
+    <div class="voice-selector-capsule" title="Select Voice (All Kokoro Voices & Riko GPT-SoVITS Clone)">
+      <div class="voice-selector-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="22"></line>
+        </svg>
+      </div>
+      <select id="voice-select" class="voice-select" aria-label="Select Voice">
+        <option value="af_sky">Loading voices...</option>
+      </select>
+    </div>
+
+    <div class="model-toggle">
+      <button id="btn-riko" class="model-chip active" data-model="riko">Riko</button>
+      <button id="btn-furina" class="model-chip" data-model="furina">Furina</button>
+      <button id="btn-reset-cam" class="model-chip" title="Reset Camera View (Drag left-click to rotate, right-click to pan, scroll to zoom)" style="padding: 5px 8px; display: inline-flex; align-items: center;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <!-- Real-Time Anime Speech Subtitles -->
@@ -289,6 +364,6 @@
     </button>
   </div>
 
-  <script type="module" src="app.js?v=12"></script>
+  <script type="module" src="app.js?v=13"></script>
 </body>
 </html>
