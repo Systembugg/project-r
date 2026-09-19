@@ -121,8 +121,9 @@ def llm_response(user_input):
 
     msg = response.choices[0].message
     content = msg.content or ""
-    if not content:
-        content = getattr(msg, "reasoning", "") or getattr(msg, "reasoning_content", "") or ""
+    # NEVER use reasoning/thinking content — it must not be spoken aloud
+    if not content or not content.strip():
+        content = "Wow, my brain literally just bluescreened. Try again, genius."
     
     assistant_message = extract_spoken_dialogue(content)
 
