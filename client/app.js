@@ -5,18 +5,13 @@ import VRMCompanionController from './VRMCompanionController.js';
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
-const dialogueCard = document.getElementById('dialogue-card');
-const userQueryEl = document.getElementById('user-query');
-const speakerNameEl = document.getElementById('speaker-name');
-const statusBadgeEl = document.getElementById('status-badge');
-const dialogueTextEl = document.getElementById('dialogue-text');
+const speechSubtitle = document.getElementById('speech-subtitle');
 const chatInput = document.getElementById('chat-input');
-const sendBtn = document.getElementById('send-btn');
 const micBtn = document.getElementById('mic-btn');
 const btnRiko = document.getElementById('btn-riko');
 const btnFurina = document.getElementById('btn-furina');
-const loadingOverlay = document.getElementById('loading-overlay');
-const loadingText = document.getElementById('loading-text');
+const loadingChip = document.getElementById('loading-chip');
+const loadingChipText = document.getElementById('loading-chip-text');
 
 // State
 let currentVRM = null;
@@ -26,64 +21,70 @@ let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let activeModelKey = 'riko';
+let subtitleFadeTimer = null;
+let subtitleAnimFrame = null;
 
 const MODELS = {
   riko: {
     name: 'Riko',
     url: './models/riko.vrm',
     voiceId: 'riko',
-    cameraY: 1.30,
-    cameraZ: 1.15,
+    cameraY: 1.25,
+    cameraZ: 1.05,
+    lookAtY: 1.22,
   },
   furina: {
     name: 'Furina',
     url: './models/furina.vrm',
     voiceId: 'riko',
-    cameraY: 1.25,
-    cameraZ: 1.15,
+    cameraY: 1.20,
+    cameraZ: 1.05,
+    lookAtY: 1.18,
   },
 };
 
 // ---------------------------------------------------------------------------
-// 1. Three.js Scene Setup
+// 1. Three.js Scene Setup (Clean White Anime Studio Aesthetic)
 // ---------------------------------------------------------------------------
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
-  32,
+  30,
   window.innerWidth / window.innerHeight,
   0.1,
   20.0
 );
-camera.position.set(0.0, 1.30, 1.15);
+camera.position.set(0.0, 1.25, 1.05);
+camera.lookAt(0.0, 1.22, 0.0);
 
 const renderer = new THREE.WebGLRenderer({
-  alpha: true,
   antialias: true,
+  alpha: false,
   powerPreference: 'high-performance',
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0xffffff, 1.0); // Clean White Canvas like Rayen's setup
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.08;
 canvasContainer.appendChild(renderer.domElement);
 
-// Lighting setup: soft ambient + key light + subtle rim light
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
+// Flattering Bright Anime Studio Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.45);
 scene.add(ambientLight);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
-keyLight.position.set(1.5, 2.5, 2.0);
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+keyLight.position.set(1.2, 2.2, 1.8);
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight(0xc084fc, 0.7);
-rimLight.position.set(-1.5, 2.0, -1.5);
-scene.add(rimLight);
-
-const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.4);
-fillLight.position.set(0.0, -1.0, 2.0);
+const fillLight = new THREE.DirectionalLight(0xfff5f8, 0.7);
+fillLight.position.set(-1.2, 1.6, 1.5);
 scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.55);
+rimLight.position.set(0.0, 2.5, -2.0);
+scene.add(rimLight);
 
 // Handle window resize
 window.addEventListener('resize', () => {
@@ -93,15 +94,22 @@ window.addEventListener('resize', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. VRM Loader & Companion Controller Initialization
+// 2. VRM Loader & Model Management
 // ---------------------------------------------------------------------------
 const loader = new GLTFLoader();
 loader.register((parser) => new VRMLoaderPlugin(parser));
 
-function setLoading(show, text = 'Loading 3D Companion...') {
-  if (loadingOverlay) {
-    loadingOverlay.style.display = show ? 'flex' : 'none';
-    if (loadingText) loadingText.textContent = text;
+function setLoading(show, text = 'Loading Riko...') {
+  if (!loadingChip) return;
+  if (show) {
+    loadingChip.style.display = 'flex';
+    loadingChip.style.opacity = '1';
+    if (loadingChipText) loadingChipText.textContent = text;
+  } else {
+    loadingChip.style.opacity = '0';
+    setTimeout(() => {
+      if (loadingChip.style.opacity === '0') loadingChip.style.display = 'none';
+    }, 350);
   }
 }
 
@@ -110,10 +118,8 @@ async function loadModel(modelKey) {
   if (!modelInfo) return;
 
   setLoading(true, `Loading ${modelInfo.name}...`);
-  speakerNameEl.textContent = modelInfo.name;
 
   try {
-    // Clean up previous VRM and companion
     if (companion) {
       companion.dispose();
       companion = null;
@@ -126,52 +132,40 @@ async function loadModel(modelKey) {
 
     const gltf = await loader.loadAsync(modelInfo.url);
     const vrm = gltf.userData.vrm;
-    if (!vrm) {
-      throw new Error('Loaded model does not contain VRM data.');
-    }
+    if (!vrm) throw new Error('Loaded model has no VRM data.');
 
-    // Standard VRM orientation: rotate VRM0 models 180 deg to face camera (+Z)
-    VRMUtils.rotateVRM0(vrm);
+    // In VRM 0.0, models face -Z; rotating 180 deg (PI) faces the camera (+Z)
+    vrm.scene.rotation.y = Math.PI;
 
     scene.add(vrm.scene);
     currentVRM = vrm;
 
-    // Adjust camera to frame avatar nicely
+    // Frame avatar nicely waist-up
     camera.position.set(0.0, modelInfo.cameraY, modelInfo.cameraZ);
-    camera.lookAt(0.0, modelInfo.cameraY - 0.05, 0.0);
+    camera.lookAt(0.0, modelInfo.lookAtY, 0.0);
 
-    // Initialize the lifelike companion controller
+    // Initialize companion controller with organic idle, gaze & natural arms
     companion = new VRMCompanionController(vrm, {
       lipSyncGain: 1.8,
       armRelaxation: true,
       breathIntensity: 1.0,
-      swayIntensity: 0.9,
+      swayIntensity: 0.85,
     });
     companion.trackCursor(window);
 
-    // If audio is currently playing, hook it into the new companion
-    if (currentAudio && !currentAudio.paused) {
-      try {
-        companion.attachAudioElement(currentAudio);
-      } catch (_) {}
-    }
-
     activeModelKey = modelKey;
-    btnRiko.classList.toggle('active', modelKey === 'riko');
-    btnFurina.classList.toggle('active', modelKey === 'furina');
-
-    statusBadgeEl.textContent = 'Ready';
+    btnRiko?.classList.toggle('active', modelKey === 'riko');
+    btnFurina?.classList.toggle('active', modelKey === 'furina');
   } catch (err) {
-    console.error(`Failed to load model ${modelInfo.name}:`, err);
-    dialogueTextEl.textContent = `Error loading ${modelInfo.name} 3D model. Check console.`;
-    statusBadgeEl.textContent = 'Error';
+    console.error(`Failed to load ${modelInfo.name}:`, err);
+    if (loadingChipText) loadingChipText.textContent = `Failed to load ${modelInfo.name}`;
   } finally {
     setLoading(false);
   }
 }
 
 // ---------------------------------------------------------------------------
-// 3. Render Animation Loop
+// 3. Render Loop
 // ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
 
@@ -188,76 +182,145 @@ function animate() {
 animate();
 
 // ---------------------------------------------------------------------------
-// 4. Model Switcher Handlers
+// 4. Real-Time Speech Subtitle Streaming (Typewriter / Voice Synced)
 // ---------------------------------------------------------------------------
-btnRiko.addEventListener('click', () => {
-  if (activeModelKey !== 'riko') loadModel('riko');
-});
+function streamSubtitles(fullText, audio) {
+  if (subtitleFadeTimer) clearTimeout(subtitleFadeTimer);
+  if (subtitleAnimFrame) cancelAnimationFrame(subtitleAnimFrame);
 
-btnFurina.addEventListener('click', () => {
-  if (activeModelKey !== 'furina') loadModel('furina');
-});
+  speechSubtitle.innerHTML = '';
+  speechSubtitle.style.opacity = '1';
+
+  const words = fullText.trim().split(/\s+/);
+  const spans = words.map((word) => {
+    const span = document.createElement('span');
+    span.className = 'sub-word';
+    span.textContent = word;
+    speechSubtitle.appendChild(span);
+    return span;
+  });
+
+  const startTime = performance.now();
+
+  function update() {
+    if (!audio || audio.paused || audio.ended) {
+      spans.forEach((s) => s.classList.add('visible'));
+      return;
+    }
+
+    const duration =
+      audio.duration && !isNaN(audio.duration) && audio.duration > 0
+        ? audio.duration
+        : words.length * 0.32;
+
+    const current = audio.currentTime || (performance.now() - startTime) / 1000;
+    const progress = Math.min(1.0, current / duration);
+
+    // Reveal words progressively matching voice timing
+    const wordsToShow = Math.min(words.length, Math.ceil(progress * words.length));
+    for (let i = 0; i < words.length; i++) {
+      if (i < wordsToShow) {
+        spans[i].classList.add('visible');
+      }
+    }
+
+    if (current < duration && !audio.ended) {
+      subtitleAnimFrame = requestAnimationFrame(update);
+    } else {
+      spans.forEach((s) => s.classList.add('visible'));
+    }
+  }
+
+  subtitleAnimFrame = requestAnimationFrame(update);
+
+  if (audio) {
+    audio.addEventListener(
+      'ended',
+      () => {
+        if (subtitleAnimFrame) cancelAnimationFrame(subtitleAnimFrame);
+        spans.forEach((s) => s.classList.add('visible'));
+
+        // Keep subtitle visible for 2.8s after speech, then smoothly fade out
+        subtitleFadeTimer = setTimeout(() => {
+          speechSubtitle.style.opacity = '0';
+        }, 2800);
+      },
+      { once: true }
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
-// 5. Audio Playback & Real-Time Lip-Sync
+// 5. Audio Playback & Viseme Lip-Sync Hookup
 // ---------------------------------------------------------------------------
-function playVoice(audioUrl) {
-  if (!audioUrl) return;
-
+function playVoiceReply(replyText, audioUrl) {
   if (currentAudio) {
     currentAudio.pause();
     currentAudio = null;
   }
 
+  if (!audioUrl) {
+    // If no audio (text only), stream subtitle smoothly at reading speed
+    speechSubtitle.innerHTML = '';
+    speechSubtitle.style.opacity = '1';
+    const words = replyText.trim().split(/\s+/);
+    words.forEach((w, i) => {
+      const span = document.createElement('span');
+      span.className = 'sub-word';
+      span.textContent = w;
+      speechSubtitle.appendChild(span);
+      setTimeout(() => span.classList.add('visible'), i * 80);
+    });
+    subtitleFadeTimer = setTimeout(() => {
+      speechSubtitle.style.opacity = '0';
+    }, words.length * 80 + 3000);
+    return;
+  }
+
   const audio = new Audio(audioUrl);
   currentAudio = audio;
 
-  statusBadgeEl.textContent = 'Speaking...';
   if (companion) {
     try {
       companion.attachAudioElement(audio);
       companion.setEmotion('joy');
     } catch (e) {
-      console.warn('Could not attach audio element to companion:', e);
+      console.warn('Audio element attach error:', e);
     }
   }
 
   audio.onended = () => {
-    statusBadgeEl.textContent = 'Ready';
     if (companion) companion.setEmotion('neutral');
   };
 
   audio.onerror = () => {
-    statusBadgeEl.textContent = 'Ready';
     if (companion) companion.setEmotion('neutral');
   };
 
-  audio.play().catch((err) => {
-    console.warn('Audio autoplay blocked or failed:', err);
-    statusBadgeEl.textContent = 'Ready';
-    if (companion) companion.setEmotion('neutral');
-  });
+  audio
+    .play()
+    .then(() => {
+      streamSubtitles(replyText, audio);
+    })
+    .catch((err) => {
+      console.warn('Autoplay error:', err);
+      streamSubtitles(replyText, null);
+      if (companion) companion.setEmotion('neutral');
+    });
 }
 
 // ---------------------------------------------------------------------------
-// 6. Dialogue & Chat Handling
+// 6. Dialogue Interaction (Send Message)
 // ---------------------------------------------------------------------------
-function setDialogue(text, userQuery = null) {
-  dialogueTextEl.textContent = text;
-  if (userQuery) {
-    userQueryEl.textContent = `You: ${userQuery}`;
-    userQueryEl.style.display = 'block';
-  }
-}
-
-async function sendTextMessage() {
+async function sendMessage() {
   const text = chatInput.value.trim();
   if (!text) return;
 
   chatInput.value = '';
-  setDialogue('...', text);
-  statusBadgeEl.textContent = 'Thinking...';
-  if (companion) companion.setEmotion('neutral');
+
+  // Temporary thinking dots
+  speechSubtitle.innerHTML = '<span class="sub-word visible" style="opacity: 0.6;">...</span>';
+  speechSubtitle.style.opacity = '1';
 
   try {
     const res = await fetch('/api/text_chat', {
@@ -268,30 +331,25 @@ async function sendTextMessage() {
 
     const data = await res.json();
     if (data.reply) {
-      setDialogue(data.reply, text);
-      if (data.audio_url) {
-        playVoice(data.audio_url);
-      } else {
-        statusBadgeEl.textContent = 'Ready';
-      }
+      playVoiceReply(data.reply, data.audio_url);
     } else {
-      setDialogue('No response received.', text);
-      statusBadgeEl.textContent = 'Ready';
+      speechSubtitle.style.opacity = '0';
     }
   } catch (err) {
-    console.error('Chat error:', err);
-    setDialogue('Connection error to server backend.', text);
-    statusBadgeEl.textContent = 'Offline';
+    console.error('Chat request error:', err);
+    speechSubtitle.innerHTML = '<span class="sub-word visible">Connection error...</span>';
+    setTimeout(() => {
+      speechSubtitle.style.opacity = '0';
+    }, 2500);
   }
 }
 
-sendBtn.addEventListener('click', sendTextMessage);
 chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendTextMessage();
+  if (e.key === 'Enter') sendMessage();
 });
 
 // ---------------------------------------------------------------------------
-// 7. Voice Recording (Microphone)
+// 7. Voice Recording (Microphone Capsule)
 // ---------------------------------------------------------------------------
 micBtn.addEventListener('click', async () => {
   if (!isRecording) {
@@ -305,9 +363,11 @@ micBtn.addEventListener('click', async () => {
       };
 
       mediaRecorder.onstop = async () => {
-        micBtn.classList.remove('active');
+        micBtn.classList.remove('recording');
         isRecording = false;
-        statusBadgeEl.textContent = 'Processing Voice...';
+
+        speechSubtitle.innerHTML = '<span class="sub-word visible" style="opacity: 0.6;">...</span>';
+        speechSubtitle.style.opacity = '1';
 
         const blob = new Blob(audioChunks, { type: 'audio/wav' });
         const form = new FormData();
@@ -318,29 +378,28 @@ micBtn.addEventListener('click', async () => {
           const res = await fetch('/api/chat', { method: 'POST', body: form });
           const data = await res.json();
 
-          if (data.user_text && data.reply) {
-            setDialogue(data.reply, data.user_text);
-            if (data.audio_url) {
-              playVoice(data.audio_url);
-            } else {
-              statusBadgeEl.textContent = 'Ready';
-            }
+          if (data.reply) {
+            playVoiceReply(data.reply, data.audio_url);
+          } else {
+            speechSubtitle.style.opacity = '0';
           }
         } catch (err) {
-          console.error('Voice processing failed:', err);
-          statusBadgeEl.textContent = 'Voice Error';
+          console.error('Voice processing error:', err);
+          speechSubtitle.innerHTML = '<span class="sub-word visible">Voice processing error...</span>';
+          setTimeout(() => {
+            speechSubtitle.style.opacity = '0';
+          }, 2500);
         }
 
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((t) => t.stop());
       };
 
       mediaRecorder.start();
       isRecording = true;
-      micBtn.classList.add('active');
-      statusBadgeEl.textContent = 'Listening...';
+      micBtn.classList.add('recording');
     } catch (err) {
-      console.error('Microphone error:', err);
-      alert('Microphone permission required for voice interaction.');
+      console.error('Mic access error:', err);
+      alert('Microphone permission required.');
     }
   } else {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -350,6 +409,17 @@ micBtn.addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Start by loading Riko
+// 8. Model Switcher Handlers
+// ---------------------------------------------------------------------------
+btnRiko?.addEventListener('click', () => {
+  if (activeModelKey !== 'riko') loadModel('riko');
+});
+
+btnFurina?.addEventListener('click', () => {
+  if (activeModelKey !== 'furina') loadModel('furina');
+});
+
+// ---------------------------------------------------------------------------
+// 9. Initial Load
 // ---------------------------------------------------------------------------
 loadModel('riko');

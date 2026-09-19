@@ -20,6 +20,10 @@
 import * as THREE from 'three';
 import { VRMHumanBoneName } from '@pixiv/three-vrm';
 
+// shared scratch objects (avoid per-frame allocations)
+const _tmpEuler = new THREE.Euler();
+const _tmpQuat = new THREE.Quaternion();
+
 /* ------------------------------------------------------------------ *
  *  Tiny value-noise implementation (no deps).
  *  Gives smooth, non-repeating "organic" 1D signals — the thing that
@@ -570,7 +574,3 @@ export default class VRMCompanionController {
     this._audio = { ctx: null, analyser: null, data: null, source: null, enabled: false };
   }
 }
-
-// shared scratch objects (avoid per-frame allocations)
-const _tmpEuler = new THREE.Euler();
-const _tmpQuat = new THREE.Quaternion();
