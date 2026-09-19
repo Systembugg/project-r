@@ -28,6 +28,10 @@ async function loadVoices() {
         if (v.id === data.active) opt.selected = true;
         voiceSelect.appendChild(opt);
       });
+      const picker = document.querySelector('.voice-picker');
+      if (picker) {
+        picker.style.display = data.voices.length > 1 ? 'flex' : 'none';
+      }
     }
   } catch (err) {
     console.error('Failed to load voices:', err);
