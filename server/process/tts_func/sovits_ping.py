@@ -100,7 +100,7 @@ async def async_sovits_gen(in_text, output_wav_pth="output.wav", voice_id=None):
 
     # 1. Try local GPT-SoVITS if running
     try:
-        response = requests.post(SOVITS_URL, json=payload, timeout=30)
+        response = requests.post(SOVITS_URL, json=payload, timeout=60)
         if response.status_code == 200:
             with open(output_wav_pth, "wb") as f:
                 f.write(response.content)

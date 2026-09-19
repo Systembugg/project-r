@@ -65,6 +65,45 @@ def save_history(history):
         json.dump(history, f, indent=2, ensure_ascii=False)
 
 
+def extract_spoken_dialogue(text: str) -> str:
+    if not text:
+        return ""
+    
+    # Strip <think>...</think> blocks
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+    # If model output contains planning like 'We'll write: "..."' or 'say: "..."'
+    quoted_match = re.search(r'(?:We[\'’]?ll write|write|say|reply|respond with):\s*["“]([^"”]+)["”]', text, re.IGNORECASE)
+    if quoted_match:
+        text = quoted_match.group(1).strip()
+    
+    # Filter out any lines starting with planning / instruction reflection
+    lines = text.split('\n')
+    filtered_lines = []
+    for line in lines:
+        l_str = line.strip()
+        if not l_str:
+            continue
+        if re.match(r'^(?:we need to|let[\'’]?s |i should |i need to|the user is|responding as|here is|here\'s|as riko|riko:)\b', l_str, re.IGNORECASE):
+            continue
+        filtered_lines.append(l_str)
+    
+    if filtered_lines:
+        text = " ".join(filtered_lines)
+
+    # Remove roleplay asterisks like *smiles*
+    text = re.sub(r'\*.*?\*', '', text).strip()
+
+    # Remove enclosing quotes
+    text = text.strip('"\'“”')
+
+    # Safety check: if text still looks like meta-planning or empty
+    if not text or len(text) < 5 or text.lower().startswith("we need"):
+        return "Thank you? Please, I’m the brains of this operation—you should be thanking me for tolerating your coding."
+        
+    return text
+
+
 def llm_response(user_input):
     messages = load_history()
 
@@ -76,25 +115,16 @@ def llm_response(user_input):
     response = client.chat.completions.create(
         model=active_model,
         messages=messages,
-        temperature=0.8,
-        max_tokens=250,
+        temperature=0.7,
+        max_tokens=150,
     )
 
     msg = response.choices[0].message
     content = msg.content or ""
-    
-    # Strip any <think>...</think> reasoning blocks from thinking models
-    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
     if not content:
         content = getattr(msg, "reasoning", "") or getattr(msg, "reasoning_content", "") or ""
-        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
     
-    # Strip any roleplay actions inside asterisks like *snorts* or *sighs*
-    cleaned = re.sub(r'\*.*?\*', '', content).strip()
-    assistant_message = cleaned if cleaned else content.strip()
-    assistant_message = assistant_message.strip('"\'')
-    if not assistant_message:
-        assistant_message = "Oh please, don't strain yourself trying to impress me."
+    assistant_message = extract_spoken_dialogue(content)
 
     # Append assistant response
     messages.append({"role": "assistant", "content": assistant_message})

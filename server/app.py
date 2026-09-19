@@ -84,6 +84,11 @@ def clean_for_tts(text: str) -> str:
     # Remove emojis and unpronounceable unicode symbols for TTS
     cleaned = re.sub(r'[\U00010000-\U0010ffff]', '', text)
     cleaned = re.sub(r'[\*\~\_]', '', cleaned)
+    cleaned = cleaned.strip('"\'“”')
+    # Keep at most 2 sentences to guarantee fast TTS synthesis under 3 seconds
+    sentences = re.split(r'(?<=[.!?])\s+', cleaned)
+    if len(sentences) > 2:
+        cleaned = " ".join(sentences[:2])
     cleaned = cleaned.strip()
     return cleaned if cleaned else text
 
