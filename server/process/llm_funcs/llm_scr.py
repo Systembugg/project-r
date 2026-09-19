@@ -13,9 +13,16 @@ config_path = BASE_DIR / "character_config.yaml"
 with open(config_path, "r", encoding="utf-8") as f:
     char_config = yaml.safe_load(f)
 
+def get_model_name():
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+            return os.getenv("OPENROUTER_MODEL", cfg.get("model", "meta-llama/llama-3.3-70b-instruct"))
+    except Exception:
+        return "meta-llama/llama-3.3-70b-instruct"
+
 # OpenRouter configuration
 api_key = os.getenv("OPENROUTER_API_KEY", char_config.get("OPENAI_API_KEY"))
-model_name = os.getenv("OPENROUTER_MODEL", char_config.get("model", "deepseek/deepseek-v4-flash-0731:free"))
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -64,24 +71,30 @@ def llm_response(user_input):
     # Append user message
     messages.append({"role": "user", "content": user_input})
 
-    # Call OpenRouter with token limit for rapid generation
+    # Call OpenRouter
+    active_model = get_model_name()
     response = client.chat.completions.create(
-        model=model_name,
+        model=active_model,
         messages=messages,
-        temperature=0.75,
-        max_tokens=150,
+        temperature=0.8,
+        max_tokens=250,
     )
 
     msg = response.choices[0].message
     content = msg.content or ""
+    
+    # Strip any <think>...</think> reasoning blocks from thinking models
+    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
     if not content:
         content = getattr(msg, "reasoning", "") or getattr(msg, "reasoning_content", "") or ""
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
     
     # Strip any roleplay actions inside asterisks like *snorts* or *sighs*
     cleaned = re.sub(r'\*.*?\*', '', content).strip()
     assistant_message = cleaned if cleaned else content.strip()
+    assistant_message = assistant_message.strip('"\'')
     if not assistant_message:
-        assistant_message = "I'm listening. What's on your mind?"
+        assistant_message = "Oh please, don't strain yourself trying to impress me."
 
     # Append assistant response
     messages.append({"role": "assistant", "content": assistant_message})
