@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-import VRMCompanionController from './VRMCompanionController.js?v=8';
+import VRMCompanionController from './VRMCompanionController.js?v=11';
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
@@ -29,17 +29,17 @@ const MODELS = {
     name: 'Riko',
     url: './models/riko.vrm',
     voiceId: 'riko',
-    cameraY: 1.26,
-    cameraZ: 1.45,
-    lookAtY: 1.20,
+    cameraY: 1.05,
+    cameraZ: 0.96,
+    lookAtY: 1.01,
   },
   furina: {
     name: 'Furina',
     url: './models/furina.vrm',
     voiceId: 'riko',
-    cameraY: 1.24,
-    cameraZ: 1.45,
-    lookAtY: 1.18,
+    cameraY: 1.05,
+    cameraZ: 0.96,
+    lookAtY: 1.01,
   },
 };
 
@@ -54,8 +54,8 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   20.0
 );
-camera.position.set(0.0, 1.26, 1.45);
-camera.lookAt(0.0, 1.20, 0.0);
+camera.position.set(0.0, 1.05, 0.96);
+camera.lookAt(0.0, 1.01, 0.0);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -316,8 +316,8 @@ async function sendMessage() {
 
   chatInput.value = '';
 
-  // Temporary thinking dots
-  speechSubtitle.innerHTML = '<span class="sub-word visible" style="opacity: 0.6;">...</span>';
+  // Live thinking indicator
+  speechSubtitle.innerHTML = '<span class="sub-word visible thinking-dots">Thinking...</span>';
   speechSubtitle.style.opacity = '1';
 
   try {
@@ -364,7 +364,7 @@ micBtn.addEventListener('click', async () => {
         micBtn.classList.remove('recording');
         isRecording = false;
 
-        speechSubtitle.innerHTML = '<span class="sub-word visible" style="opacity: 0.6;">...</span>';
+        speechSubtitle.innerHTML = '<span class="sub-word visible thinking-dots">Listening & Thinking...</span>';
         speechSubtitle.style.opacity = '1';
 
         const blob = new Blob(audioChunks, { type: 'audio/wav' });

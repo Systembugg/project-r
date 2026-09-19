@@ -64,12 +64,12 @@ def llm_response(user_input):
     # Append user message
     messages.append({"role": "user", "content": user_input})
 
-    # Call OpenRouter
+    # Call OpenRouter with token limit for rapid generation
     response = client.chat.completions.create(
         model=model_name,
         messages=messages,
-        temperature=0.8,
-        max_tokens=1024,
+        temperature=0.75,
+        max_tokens=150,
     )
 
     msg = response.choices[0].message

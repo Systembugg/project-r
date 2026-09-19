@@ -164,6 +164,18 @@
       transform: translateY(0) scale(1);
     }
 
+    .thinking-dots {
+      opacity: 0.75;
+      font-size: 20px;
+      letter-spacing: 0.8px;
+      animation: thinkingPulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes thinkingPulse {
+      0%, 100% { opacity: 0.45; transform: scale(0.96); }
+      50% { opacity: 0.95; transform: scale(1.02); }
+    }
+
     /* Single Sleek Floating Capsule Input Bar (Image 2 Style) */
     .floating-capsule {
       position: absolute;
@@ -271,6 +283,6 @@
     </button>
   </div>
 
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=11"></script>
 </body>
 </html>
