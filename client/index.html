@@ -261,10 +261,16 @@
     <span id="loading-chip-text">Loading Riko...</span>
   </div>
 
-  <!-- Discreet Model Switcher Pill -->
+  <!-- Discreet Model Switcher & Camera Reset Pill -->
   <div class="model-toggle">
     <button id="btn-riko" class="model-chip active" data-model="riko">Riko</button>
     <button id="btn-furina" class="model-chip" data-model="furina">Furina</button>
+    <button id="btn-reset-cam" class="model-chip" title="Reset Camera View (Drag left-click to rotate, right-click to pan, scroll to zoom)" style="padding: 5px 8px; display: inline-flex; align-items: center;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+        <path d="M3 3v5h5"></path>
+      </svg>
+    </button>
   </div>
 
   <!-- Real-Time Anime Speech Subtitles -->
@@ -283,6 +289,6 @@
     </button>
   </div>
 
-  <script type="module" src="app.js?v=11"></script>
+  <script type="module" src="app.js?v=12"></script>
 </body>
 </html>

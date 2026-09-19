@@ -67,27 +67,34 @@ const damp = (current, target, speed, dt) =>
  * ------------------------------------------------------------------ */
 const EMOTIONS = {
   neutral:   { happy: 0.0, angry: 0.0, sad: 0.0, surprised: 0.0, relaxed: 0.0 },
-  joy:       { happy: 1.0, relaxed: 0.15 },
-  smug:      { happy: 0.35, relaxed: 0.5, angry: 0.1 },
-  angry:     { angry: 1.0 },
-  sad:       { sad: 1.0 },
-  surprised: { surprised: 1.0 },
-  relaxed:   { relaxed: 1.0 },
+  smug:      { relaxed: 0.40, angry: 0.12 }, // Subtle sassy smirk with open eyes
+  fun:       { relaxed: 0.45 },              // Natural anime smile
+  sassy:     { angry: 0.30, relaxed: 0.18 }, // Playful tsundere irritation
+  joy:       { happy: 0.45, relaxed: 0.25 }, // Cute cheerful expression
+  angry:     { angry: 0.50 },
+  sad:       { sad: 0.45 },
+  surprised: { surprised: 0.50 },
+  relaxed:   { relaxed: 0.35 },
 };
 
 // Canonical -> possible VRM expression names (spec differences).
 const EXPRESSION_ALIASES = {
-  happy:     ['happy', 'joy'],
-  angry:     ['angry'],
-  sad:       ['sad', 'sorrow'],
-  surprised: ['surprised', 'surprise'],
-  relaxed:   ['relaxed', 'fun'],
-  blink:     ['blink'],
-  aa:        ['aa', 'a'],
-  ih:        ['ih', 'i'],
-  ou:        ['ou', 'u'],
-  ee:        ['ee', 'e'],
-  oh:        ['oh', 'o'],
+  happy:     ['happy', 'joy', 'Joy'],
+  joy:       ['joy', 'Joy', 'happy'],
+  fun:       ['fun', 'Fun', 'relaxed'],
+  relaxed:   ['fun', 'Fun', 'relaxed'],
+  angry:     ['angry', 'Angry'],
+  sad:       ['sad', 'sorrow', 'Sorrow'],
+  sorrow:    ['sorrow', 'Sorrow', 'sad'],
+  surprised: ['surprised', 'surprise', 'Surprised'],
+  blink:     ['blink', 'Blink'],
+  blink_l:   ['blink_l', 'Blink_L'],
+  blink_r:   ['blink_r', 'Blink_R'],
+  aa:        ['aa', 'a', 'A'],
+  ih:        ['ih', 'i', 'I'],
+  ou:        ['ou', 'u', 'U'],
+  ee:        ['ee', 'e', 'E'],
+  oh:        ['oh', 'o', 'O'],
   lookUp:    ['lookUp'],
   lookDown:  ['lookDown'],
   lookLeft:  ['lookLeft'],
@@ -484,44 +491,58 @@ export default class VRMCompanionController {
   }
 
   /* ============================================================== *
-   *  LIP-SYNC  — Subtle, cute anime mouth movement (clamped to 0.35)
+   *  LIP-SYNC  — Multi-Band Formant Visemes (aa, ee, oh, ih, ou)
    * ============================================================== */
   _applyLipSync(dt) {
     const A = this._audio;
-    let targetOpen = 0;
+    let targetAA = 0;
+    let targetEE = 0;
+    let targetOH = 0;
 
     if (A.enabled && A.analyser) {
       A.analyser.getByteFrequencyData(A.data);
-      const n = A.data.length;
+      const sampleRate = A.ctx?.sampleRate || 44100;
+      const binWidth = sampleRate / (A.analyser.fftSize || 1024);
 
-      // Vocal formant frequency band (approx 120Hz to 2400Hz)
-      let sum = 0, count = 0;
-      const startBin = Math.floor(n * 0.02);
-      const endBin   = Math.floor(n * 0.28);
-      for (let i = startBin; i < endBin; i++) {
-        sum += A.data[i];
-        count++;
-      }
-      const rawEnergy = count > 0 ? (sum / count) / 255 : 0;
+      // Helper to compute average energy in a specific frequency band (Hz)
+      const getBandEnergy = (fMin, fMax) => {
+        const iStart = Math.max(1, Math.floor(fMin / binWidth));
+        const iEnd = Math.min(A.data.length - 1, Math.floor(fMax / binWidth));
+        if (iEnd < iStart) return 0;
+        let sum = 0;
+        for (let i = iStart; i <= iEnd; i++) sum += A.data[i];
+        return (sum / (iEnd - iStart + 1)) / 255;
+      };
 
-      // Gate background noise & softly scale
-      if (rawEnergy > 0.05) {
-        // Clamp maximum mouth openness to 0.35 so mouth never gapes open or stretches
-        targetOpen = clamp((rawEnergy - 0.05) * 1.5, 0, 0.35);
+      // Formants: Low = 'ou'/'oh', Mid = 'aa', High = 'ee'/'ih'
+      const lowEnergy  = getBandEnergy(150, 650);
+      const midEnergy  = getBandEnergy(650, 1600);
+      const highEnergy = getBandEnergy(1600, 3500);
+      const avgVoice   = (lowEnergy * 0.35 + midEnergy * 0.45 + highEnergy * 0.20);
+
+      // Noise gate
+      if (avgVoice > 0.04) {
+        const gain = this.cfg.lipSyncGain || 1.8;
+        // Natural anime openness limits (prevent facial tearing)
+        targetAA = clamp((midEnergy - 0.03) * gain * 1.3, 0, 0.42);
+        targetEE = clamp((highEnergy - 0.03) * gain * 1.0, 0, 0.32);
+        targetOH = clamp((lowEnergy - 0.03) * gain * 0.85, 0, 0.28);
       }
     }
 
-    // Smooth responsive damping
-    const k = 14.0;
-    this._viseme.aa = damp(this._viseme.aa, targetOpen, k, dt);
-    this._viseme.oh = damp(this._viseme.oh, targetOpen * 0.25, k, dt);
+    // Dynamic smoothing
+    const k = this.cfg.lipSyncDecay || 15.0;
+    this._viseme.aa = damp(this._viseme.aa, targetAA, k, dt);
+    this._viseme.ee = damp(this._viseme.ee, targetEE, k, dt);
+    this._viseme.oh = damp(this._viseme.oh, targetOH, k, dt);
+    this._viseme.ih = damp(this._viseme.ih, targetEE * 0.65, k, dt);
+    this._viseme.ou = damp(this._viseme.ou, targetOH * 0.65, k, dt);
 
-    // Drive cute anime mouth opening
     this._setExpr('aa', this._viseme.aa);
+    this._setExpr('ee', this._viseme.ee);
     this._setExpr('oh', this._viseme.oh);
-    this._setExpr('ih', 0);
-    this._setExpr('ou', 0);
-    this._setExpr('ee', 0);
+    this._setExpr('ih', this._viseme.ih);
+    this._setExpr('ou', this._viseme.ou);
   }
 
   /* ============================================================== *

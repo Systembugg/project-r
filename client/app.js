@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-import VRMCompanionController from './VRMCompanionController.js?v=11';
+import VRMCompanionController from './VRMCompanionController.js?v=12';
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
@@ -10,6 +11,7 @@ const chatInput = document.getElementById('chat-input');
 const micBtn = document.getElementById('mic-btn');
 const btnRiko = document.getElementById('btn-riko');
 const btnFurina = document.getElementById('btn-furina');
+const btnResetCam = document.getElementById('btn-reset-cam');
 const loadingChip = document.getElementById('loading-chip');
 const loadingChipText = document.getElementById('loading-chip-text');
 
@@ -68,6 +70,55 @@ renderer.setClearColor(0xffffff, 1.0); // Clean White Background
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping; // Crucial: MToon cel-shaders must NOT use ACES Filmic!
 canvasContainer.appendChild(renderer.domElement);
+
+// Interactive 3D Camera Controls: Drag left-click to rotate, right-click to pan, scroll to zoom
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = true;
+controls.minDistance = 0.25;
+controls.maxDistance = 5.0;
+controls.target.set(0.0, 1.01, 0.0);
+
+function restoreCameraPose(modelKey) {
+  const saved = localStorage.getItem('riko_cam_' + modelKey);
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      camera.position.set(p.x, p.y, p.z);
+      controls.target.set(p.tx, p.ty, p.tz);
+      controls.update();
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+function saveCameraPose(modelKey) {
+  const pose = {
+    x: camera.position.x,
+    y: camera.position.y,
+    z: camera.position.z,
+    tx: controls.target.x,
+    ty: controls.target.y,
+    tz: controls.target.z,
+  };
+  localStorage.setItem('riko_cam_' + modelKey, JSON.stringify(pose));
+}
+
+controls.addEventListener('end', () => {
+  saveCameraPose(activeModelKey);
+});
+
+btnResetCam?.addEventListener('click', () => {
+  localStorage.removeItem('riko_cam_' + activeModelKey);
+  const m = MODELS[activeModelKey];
+  if (m) {
+    camera.position.set(0.0, m.cameraY, m.cameraZ);
+    controls.target.set(0.0, m.lookAtY, 0.0);
+    controls.update();
+  }
+});
 
 // Flattering, Crisp Anime Cel-Shaded Lighting
 // Soft ambient light preserves delicate face shading, blush, and rich black hair
@@ -138,9 +189,12 @@ async function loadModel(modelKey) {
     scene.add(vrm.scene);
     currentVRM = vrm;
 
-    // Frame avatar nicely waist-up
-    camera.position.set(0.0, modelInfo.cameraY, modelInfo.cameraZ);
-    camera.lookAt(0.0, modelInfo.lookAtY, 0.0);
+    // Restore user's custom framing if they customized it, else default bust
+    if (!restoreCameraPose(modelKey)) {
+      camera.position.set(0.0, modelInfo.cameraY, modelInfo.cameraZ);
+      controls.target.set(0.0, modelInfo.lookAtY, 0.0);
+      controls.update();
+    }
 
     // Initialize companion controller with organic idle, gaze & natural arms
     companion = new VRMCompanionController(vrm, {
@@ -170,6 +224,10 @@ const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
+
+  if (controls) {
+    controls.update();
+  }
 
   if (companion) {
     companion.update(delta);
@@ -275,20 +333,38 @@ function playVoiceReply(replyText, audioUrl) {
     return;
   }
 
+// Dynamic Emotion Classifier for Sassy Riko
+function detectEmotion(text) {
+  const lower = (text || '').toLowerCase();
+  if (lower.includes('tax') || lower.includes('rent') || lower.includes('coins') || lower.includes('wallet') || lower.includes('dumb') || lower.includes('idiot') || lower.includes('grammar') || lower.includes('amateur') || lower.includes('quit') || lower.includes('ego')) {
+    return 'sassy';
+  }
+  if (lower.includes('joke') || lower.includes('funny') || lower.includes('tragic') || lower.includes('study') || lower.includes('helping') || lower.includes('miss me') || lower.includes('boba') || lower.includes('haha') || lower.includes('cupcake')) {
+    return 'fun';
+  }
+  return 'smug'; // Default sarcastic anime smirk!
+}
+
   const audio = new Audio(audioUrl);
   currentAudio = audio;
+
+  const emotion = detectEmotion(replyText);
 
   if (companion) {
     try {
       companion.attachAudioElement(audio);
-      companion.setEmotion('neutral');
+      companion.setEmotion(emotion);
     } catch (e) {
       console.warn('Audio element attach error:', e);
     }
   }
 
   audio.onended = () => {
-    if (companion) companion.setEmotion('neutral');
+    setTimeout(() => {
+      if (companion && (!currentAudio || currentAudio.ended)) {
+        companion.setEmotion('neutral');
+      }
+    }, 1200);
   };
 
   audio.onerror = () => {
