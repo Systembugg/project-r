@@ -1,7 +1,17 @@
 import sys
+import io
 from pathlib import Path
 import uuid
 import shutil
+import re
+
+# Prevent Windows UnicodeEncodeError on emojis in console
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 # Dynamic base resolution
 SERVER_DIR = Path(__file__).resolve().parent
@@ -70,65 +80,93 @@ async def change_voice(req: SetVoiceRequest):
     return {"success": success, "active": req.voice_id}
 
 
+def clean_for_tts(text: str) -> str:
+    # Remove emojis and unpronounceable unicode symbols for TTS
+    cleaned = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    cleaned = re.sub(r'[\*\~\_]', '', cleaned)
+    cleaned = cleaned.strip()
+    return cleaned if cleaned else text
+
+
 @app.post("/api/text_chat")
 async def text_chat(req: TextChatRequest):
     user_text = req.message.strip()
     if not user_text:
         return {"error": "Empty message"}
 
-    print(f"[User Text]: {user_text}")
-    reply = llm_response(user_text)
-    print(f"[Riko Reply]: {reply}")
+    try:
+        print(f"[User Text]: {user_text}")
+        reply = llm_response(user_text)
+        print(f"[Riko Reply]: {reply}")
 
-    # Generate audio
-    uid = uuid.uuid4().hex
-    audio_filename = f"output_{uid}.wav"
-    output_path = AUDIO_DIR / audio_filename
+        # Generate audio
+        uid = uuid.uuid4().hex
+        audio_filename = f"output_{uid}.wav"
+        output_path = AUDIO_DIR / audio_filename
 
-    gen_path = sovits_gen(reply, str(output_path), voice_id=req.voice_id)
-    audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
+        tts_text = clean_for_tts(reply)
+        gen_path = sovits_gen(tts_text, str(output_path), voice_id=req.voice_id)
+        audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
 
-    return {
-        "user_text": user_text,
-        "reply": reply,
-        "audio_url": audio_url
-    }
+        return {
+            "user_text": user_text,
+            "reply": reply,
+            "audio_url": audio_url
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "user_text": user_text,
+            "reply": "Wait, my brain just had a minor glitch. Say that again?",
+            "audio_url": None
+        }
 
 
 @app.post("/api/chat")
 async def voice_chat(audio_file: UploadFile = File(...), voice_id: str = None):
-    # Save incoming audio
-    temp_input = AUDIO_DIR / f"temp_input_{uuid.uuid4().hex}.wav"
-    with open(temp_input, "wb") as buffer:
-        shutil.copyfileobj(audio_file.file, buffer)
+    try:
+        # Save incoming audio
+        temp_input = AUDIO_DIR / f"temp_input_{uuid.uuid4().hex}.wav"
+        with open(temp_input, "wb") as buffer:
+            shutil.copyfileobj(audio_file.file, buffer)
 
-    # Transcribe audio with Whisper
-    segments, _ = get_whisper().transcribe(str(temp_input))
-    user_text = " ".join([seg.text for seg in segments]).strip()
+        # Transcribe audio with Whisper
+        segments, _ = get_whisper().transcribe(str(temp_input))
+        user_text = " ".join([seg.text for seg in segments]).strip()
 
-    if temp_input.exists():
-        temp_input.unlink()
+        if temp_input.exists():
+            temp_input.unlink()
 
-    if not user_text:
-        return {"user_text": "", "reply": "I couldn't hear you clearly, genius!", "audio_url": None}
+        if not user_text:
+            return {"user_text": "", "reply": "I couldn't hear you clearly, genius!", "audio_url": None}
 
-    print(f"[Transcribed Speech]: {user_text}")
-    reply = llm_response(user_text)
-    print(f"[Riko Reply]: {reply}")
+        print(f"[Transcribed Speech]: {user_text}")
+        reply = llm_response(user_text)
+        print(f"[Riko Reply]: {reply}")
 
-    # Generate audio
-    uid = uuid.uuid4().hex
-    audio_filename = f"output_{uid}.wav"
-    output_path = AUDIO_DIR / audio_filename
+        # Generate audio
+        uid = uuid.uuid4().hex
+        audio_filename = f"output_{uid}.wav"
+        output_path = AUDIO_DIR / audio_filename
 
-    gen_path = sovits_gen(reply, str(output_path), voice_id=voice_id)
-    audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
+        tts_text = clean_for_tts(reply)
+        gen_path = sovits_gen(tts_text, str(output_path), voice_id=voice_id)
+        audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
 
-    return {
-        "user_text": user_text,
-        "reply": reply,
-        "audio_url": audio_url
-    }
+        return {
+            "user_text": user_text,
+            "reply": reply,
+            "audio_url": audio_url
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "user_text": "",
+            "reply": "Sorry, I had a quick connection hiccup. Try one more time!",
+            "audio_url": None
+        }
 
 
 # Mount audio files
