@@ -336,107 +336,101 @@ export default class VRMCompanionController {
    * Instead of one sine (Rayen's original), we sum several octaves and
    * modulate with value-noise so the loop never feels mechanical.
    */
+  /**
+   * Calm, lifelike breathing & natural arm resting pose.
+   * Eliminates chaotic jitter and lowers arms naturally down at sides.
+   */
   _applyBreathingAndSway(dt) {
     const t = this.time;
     const bi = this.cfg.breathIntensity;
-    const si = this.cfg.swayIntensity;
 
-    // --- breathing: primary ~0.25Hz (calm), secondary shimmer, noise drift
-    const breathPrimary   = Math.sin(t * 2 * Math.PI * 0.23);
-    const breathSecondary = Math.sin(t * 2 * Math.PI * 0.47 + 1.3) * 0.25;
-    const breathNoise     = this.nBreath.at(t * 0.35) * 0.3;
-    const breath = (breathPrimary + breathSecondary + breathNoise) * bi;
+    // Organic breathing wave (~4.8 sec cycle)
+    const breath = (Math.sin(t * 1.3) * 0.7 + Math.sin(t * 2.6) * 0.15) * bi;
 
-    // spine expands/lifts on inhale; chest a touch more; arms ride along.
-    this._rotateBone('spine',      -breath * 0.020, 0, 0);
-    this._rotateBone('chest',      -breath * 0.026, 0, 0);
-    this._rotateBone('upperChest', -breath * 0.018, 0, 0);
+    // Upper body expands slightly on inhalation
+    this._rotateBone('spine',      -breath * 0.010, 0, 0);
+    this._rotateBone('chest',      -breath * 0.015, 0, 0);
+    this._rotateBone('upperChest', -breath * 0.008, 0, 0);
 
-    // natural resting arm pose (brings arms from stiff T-pose down to relaxed posture at sides)
+    // Natural relaxed arm pose (arms down at sides, forearms slightly bent forward)
     if (this.cfg.armRelaxation) {
-      const armSway = this.nSwayY.at(t * 0.16) * 0.025;
-      // In VRM 0.0, +Z lowers left arm down to hip, -Z lowers right arm down to hip
-      this._rotateBone('leftUpperArm',  0.06, 0,  1.26 - armSway);
-      this._rotateBone('rightUpperArm', 0.06, 0, -1.26 + armSway);
-      this._rotateBone('leftLowerArm',  0, -0.20,  0.08);
-      this._rotateBone('rightLowerArm', 0,  0.20, -0.08);
+      // In Three-VRM normalized humanoid coordinates:
+      // Left arm (+X): rotation around -Z lowers arm to side.
+      // Right arm (-X): rotation around +Z lowers arm to side.
+      // Breathing causes subtle arm abduction (chest expansion).
+      const leftUpperArmZ  = -1.28 + (breath * 0.012);
+      const rightUpperArmZ =  1.28 - (breath * 0.012);
+
+      // Relaxed shoulders
+      this._rotateBone('leftShoulder',  0.0,  0.0, -0.05);
+      this._rotateBone('rightShoulder', 0.0,  0.0,  0.05);
+
+      // Upper arms: angled down and slightly forward
+      this._rotateBone('leftUpperArm',  0.04, -0.10, leftUpperArmZ);
+      this._rotateBone('rightUpperArm', 0.04,  0.10, rightUpperArmZ);
+
+      // Lower arms: forearms softly bent forward and inward so hands rest gracefully
+      this._rotateBone('leftLowerArm',  0.0, -0.32, -0.08);
+      this._rotateBone('rightLowerArm', 0.0,  0.32,  0.08);
     }
 
-    // shoulders/upper arms subtly abduct as the chest rises (breathing)
-    this._rotateBone('leftUpperArm',  0, 0, -breath * 0.025);
-    this._rotateBone('rightUpperArm', 0, 0,  breath * 0.025);
-
-    // subtle natural wrist & hand micro-adjustments
-    const handMicro = this.nSwayX.at(t * 0.22) * 0.035;
-    const handMicroY = this.nBreath.at(t * 0.28) * 0.025;
-    this._rotateBone('rightHand', handMicro * 0.4,  handMicroY, -handMicro);
-    this._rotateBone('leftHand',  handMicro * 0.4, -handMicroY,  handMicro);
-
-    // --- weight-shift sway: slow organic noise on hips + counter on spine
-    const swayX = this.nSwayX.at(t * 0.13) * si; // side to side
-    const swayZ = this.nSwayY.at(t * 0.11) * si; // fwd/back lean
-    this._rotateBone('hips',  swayZ * 0.012, swayX * 0.020, swayX * 0.014);
-    this._rotateBone('spine', 0, -swayX * 0.010, -swayX * 0.008); // counter-rotate
+    // Very gentle subtle hip breathing sway (barely perceptible organic life)
+    const swayX = Math.sin(t * 0.45) * 0.006 * this.cfg.swayIntensity;
+    this._rotateBone('hips', 0, swayX, 0);
   }
 
   /**
-   * Head micro-motion (nod/tilt/turn) + smooth gaze toward cursor.
-   * Head takes a *fraction* of the gaze; eyes take the rest, which is how
-   * real people look at things (eyes lead, head trails).
+   * Head motion: calm ambient drift + smooth cursor gaze tracking.
    */
   _applyHeadAndGaze(dt) {
     const t = this.time;
     const hi = this.cfg.headIntensity;
 
-    // organic idle head motion (decorrelated noise per axis)
-    let nod  = this.nHeadX.at(t * 0.19) * 0.035 * hi;
-    let tilt = this.nHeadZ.at(t * 0.16) * 0.030 * hi;
-    let turn = this.nHeadY.at(t * 0.14) * 0.040 * hi;
+    // Peaceful ambient head breathing drift
+    const nodDrift  = Math.sin(t * 0.55) * 0.014 * hi;
+    const turnDrift = Math.sin(t * 0.42) * 0.018 * hi;
+    const tiltDrift = Math.cos(t * 0.48) * 0.012 * hi;
 
-    // smooth cursor gaze
+    // Smooth cursor gaze
+    let gazeTurn = 0;
+    let gazeNod  = 0;
     if (this._gaze.active) {
-      this._gaze.x = damp(this._gaze.x, this._gaze.tx, 6, dt);
-      this._gaze.y = damp(this._gaze.y, this._gaze.ty, 6, dt);
-      const g = this.cfg.gazeStrength;
-      turn += this._gaze.x * 0.28 * g;   // yaw toward cursor
-      nod  += -this._gaze.y * 0.20 * g;  // pitch toward cursor
+      const targetTurn = clamp(this._gaze.tx * 0.22, -0.25, 0.25);
+      const targetNod  = clamp(-this._gaze.ty * 0.16, -0.18, 0.18);
+      this._gaze.x = damp(this._gaze.x, targetTurn, 3.5, dt);
+      this._gaze.y = damp(this._gaze.y, targetNod,  3.5, dt);
+      gazeTurn = this._gaze.x * this.cfg.gazeStrength;
+      gazeNod  = this._gaze.y * this.cfg.gazeStrength;
     }
 
-    // split across neck + head for a natural bend
-    this._rotateBone('neck', nod * 0.4, turn * 0.4, tilt * 0.4);
-    this._rotateBone('head', nod * 0.6, turn * 0.6, tilt * 0.6);
+    const totalNod  = nodDrift + gazeNod;
+    const totalTurn = turnDrift + gazeTurn;
+    const totalTilt = tiltDrift - (gazeTurn * 0.08);
 
-    // advance saccade state (consumed by eyes)
-    this._updateSaccade(dt);
+    // Distribute smoothly between neck (35%) and head (65%)
+    this._rotateBone('neck', totalNod * 0.35, totalTurn * 0.35, totalTilt * 0.35);
+    this._rotateBone('head', totalNod * 0.65, totalTurn * 0.65, totalTilt * 0.65);
+
+    // Smooth eye gaze tracking (eyes lead cursor gently)
+    this._updateEyes(dt);
   }
 
-  _updateSaccade(dt) {
-    if (!this.cfg.saccadeEnabled) { this._sacc.tx = this._sacc.ty = 0; }
-    else {
-      this._sacc.timer -= dt;
-      if (this._sacc.timer <= 0) {
-        // new tiny dart target
-        this._sacc.tx = this._randRange(-1, 1) * 0.25;
-        this._sacc.ty = this._randRange(-1, 1) * 0.15;
-        this._sacc.next = this._randRange(0.6, 2.8);
-        this._sacc.timer = this._sacc.next;
-      }
+  _updateEyes(dt) {
+    let targetEyeX = 0;
+    let targetEyeY = 0;
+    if (this._gaze.active) {
+      targetEyeX = clamp(this._gaze.tx * 0.28, -0.28, 0.28);
+      targetEyeY = clamp(-this._gaze.ty * 0.20, -0.20, 0.20);
     }
-    // saccades are ballistic: snap fast toward target
-    this._sacc.x = damp(this._sacc.x, this._sacc.tx, 22, dt);
-    this._sacc.y = damp(this._sacc.y, this._sacc.ty, 22, dt);
+    this._eyeX = damp(this._eyeX || 0, targetEyeX, 5.5, dt);
+    this._eyeY = damp(this._eyeY || 0, targetEyeY, 5.5, dt);
 
-    // if we have real eye bones, drive them here (gaze + saccade)
-    const ex = clamp(this._gaze.x * this.cfg.gazeStrength + this._sacc.x, -1, 1);
-    const ey = clamp(this._gaze.y * this.cfg.gazeStrength + this._sacc.y, -1, 1);
-    this._eyeYaw = ex;   // stash for expression fallback
-    this._eyePitch = ey;
+    this._eyeYaw   = this._eyeX;
+    this._eyePitch = this._eyeY;
 
     if (this._bones.leftEye || this._bones.rightEye) {
-      const yaw = ex * 0.35;   // radians, small
-      const pitch = -ey * 0.22;
-      this._rotateBone('leftEye',  pitch, yaw, 0);
-      this._rotateBone('rightEye', pitch, yaw, 0);
+      this._rotateBone('leftEye',  this._eyeY, this._eyeX, 0);
+      this._rotateBone('rightEye', this._eyeY, this._eyeX, 0);
     }
   }
 

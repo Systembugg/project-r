@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-import VRMCompanionController from './VRMCompanionController.js';
+import VRMCompanionController from './VRMCompanionController.js?v=6';
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
@@ -29,22 +29,22 @@ const MODELS = {
     name: 'Riko',
     url: './models/riko.vrm',
     voiceId: 'riko',
-    cameraY: 1.25,
-    cameraZ: 1.05,
-    lookAtY: 1.22,
+    cameraY: 1.26,
+    cameraZ: 1.45,
+    lookAtY: 1.20,
   },
   furina: {
     name: 'Furina',
     url: './models/furina.vrm',
     voiceId: 'riko',
-    cameraY: 1.20,
-    cameraZ: 1.05,
+    cameraY: 1.24,
+    cameraZ: 1.45,
     lookAtY: 1.18,
   },
 };
 
 // ---------------------------------------------------------------------------
-// 1. Three.js Scene Setup (Clean White Anime Studio Aesthetic)
+// 1. Three.js Scene Setup (Crisp Anime Cel-Shaded Studio Aesthetic)
 // ---------------------------------------------------------------------------
 const scene = new THREE.Scene();
 
@@ -54,8 +54,8 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   20.0
 );
-camera.position.set(0.0, 1.25, 1.05);
-camera.lookAt(0.0, 1.22, 0.0);
+camera.position.set(0.0, 1.26, 1.45);
+camera.lookAt(0.0, 1.20, 0.0);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -64,27 +64,25 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0xffffff, 1.0); // Clean White Canvas like Rayen's setup
+renderer.setClearColor(0xffffff, 1.0); // Clean White Background
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
+renderer.toneMapping = THREE.NoToneMapping; // Crucial: MToon cel-shaders must NOT use ACES Filmic!
 canvasContainer.appendChild(renderer.domElement);
 
-// Flattering Bright Anime Studio Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.45);
+// Flattering, Crisp Anime Cel-Shaded Lighting
+// Soft ambient light preserves delicate face shading, blush, and rich black hair
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.40);
 scene.add(ambientLight);
 
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
-keyLight.position.set(1.2, 2.2, 1.8);
+// Key directional light: crisp chin and neck cel-shading shadows
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+keyLight.position.set(0.8, 1.4, 1.2).normalize();
 scene.add(keyLight);
 
-const fillLight = new THREE.DirectionalLight(0xfff5f8, 0.7);
-fillLight.position.set(-1.2, 1.6, 1.5);
+// Soft fill light: balances deep shadows gently without washing out
+const fillLight = new THREE.DirectionalLight(0xfff5f8, 0.25);
+fillLight.position.set(-0.8, 0.9, 1.0).normalize();
 scene.add(fillLight);
-
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.55);
-rimLight.position.set(0.0, 2.5, -2.0);
-scene.add(rimLight);
 
 // Handle window resize
 window.addEventListener('resize', () => {
