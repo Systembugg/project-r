@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
-import VRMCompanionController from './VRMCompanionController.js?v=6';
+import VRMCompanionController from './VRMCompanionController.js?v=8';
 
 // DOM Elements
 const canvasContainer = document.getElementById('canvas-container');
@@ -281,7 +281,7 @@ function playVoiceReply(replyText, audioUrl) {
   if (companion) {
     try {
       companion.attachAudioElement(audio);
-      companion.setEmotion('joy');
+      companion.setEmotion('neutral');
     } catch (e) {
       console.warn('Audio element attach error:', e);
     }

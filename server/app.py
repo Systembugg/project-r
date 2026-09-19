@@ -58,6 +58,12 @@ async def list_voices():
     return get_available_voices()
 
 
+@app.post("/api/debug")
+async def debug_endpoint(data: dict):
+    print("\n[BROWSER DEBUG]:", data, flush=True)
+    return {"status": "ok"}
+
+
 @app.post("/api/set_voice")
 async def change_voice(req: SetVoiceRequest):
     success = set_active_voice(req.voice_id)

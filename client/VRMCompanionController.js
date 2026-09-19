@@ -352,26 +352,23 @@ export default class VRMCompanionController {
     this._rotateBone('chest',      -breath * 0.015, 0, 0);
     this._rotateBone('upperChest', -breath * 0.008, 0, 0);
 
-    // Natural relaxed arm pose (arms down at sides, forearms slightly bent forward)
+    // Natural relaxed arm pose (arms down at sides, forearms softly bent forward)
     if (this.cfg.armRelaxation) {
-      // In Three-VRM normalized humanoid coordinates:
-      // Left arm (+X): rotation around -Z lowers arm to side.
-      // Right arm (-X): rotation around +Z lowers arm to side.
-      // Breathing causes subtle arm abduction (chest expansion).
-      const leftUpperArmZ  = -1.28 + (breath * 0.012);
-      const rightUpperArmZ =  1.28 - (breath * 0.012);
+      // Kinematically verified: In VRM 0.0, Left arm (-X) needs +Z to rotate DOWN; Right arm (+X) needs -Z to rotate DOWN.
+      const leftUpperArmZ  =  1.25 - (breath * 0.012);
+      const rightUpperArmZ = -1.25 + (breath * 0.012);
 
-      // Relaxed shoulders
-      this._rotateBone('leftShoulder',  0.0,  0.0, -0.05);
-      this._rotateBone('rightShoulder', 0.0,  0.0,  0.05);
+      // Relaxed shoulders sloping naturally
+      this._rotateBone('leftShoulder',  0.0,  0.0,  0.06);
+      this._rotateBone('rightShoulder', 0.0,  0.0, -0.06);
 
-      // Upper arms: angled down and slightly forward
-      this._rotateBone('leftUpperArm',  0.04, -0.10, leftUpperArmZ);
-      this._rotateBone('rightUpperArm', 0.04,  0.10, rightUpperArmZ);
+      // Upper arms: angled down along ribs and slightly forward
+      this._rotateBone('leftUpperArm',  0.05,  0.10, leftUpperArmZ);
+      this._rotateBone('rightUpperArm', 0.05, -0.10, rightUpperArmZ);
 
-      // Lower arms: forearms softly bent forward and inward so hands rest gracefully
-      this._rotateBone('leftLowerArm',  0.0, -0.32, -0.08);
-      this._rotateBone('rightLowerArm', 0.0,  0.32,  0.08);
+      // Lower arms: forearms softly bent forward and inward so hands rest gracefully at hips/lap
+      this._rotateBone('leftLowerArm',  0.0,  0.35,  0.15);
+      this._rotateBone('rightLowerArm', 0.0, -0.35, -0.15);
     }
 
     // Very gentle subtle hip breathing sway (barely perceptible organic life)
@@ -391,12 +388,12 @@ export default class VRMCompanionController {
     const turnDrift = Math.sin(t * 0.42) * 0.018 * hi;
     const tiltDrift = Math.cos(t * 0.48) * 0.012 * hi;
 
-    // Smooth cursor gaze
+    // Smooth cursor gaze (Fixed Y inversion: cursor up => look up, cursor down => look down)
     let gazeTurn = 0;
     let gazeNod  = 0;
     if (this._gaze.active) {
       const targetTurn = clamp(this._gaze.tx * 0.22, -0.25, 0.25);
-      const targetNod  = clamp(-this._gaze.ty * 0.16, -0.18, 0.18);
+      const targetNod  = clamp(this._gaze.ty * 0.16, -0.18, 0.18);
       this._gaze.x = damp(this._gaze.x, targetTurn, 3.5, dt);
       this._gaze.y = damp(this._gaze.y, targetNod,  3.5, dt);
       gazeTurn = this._gaze.x * this.cfg.gazeStrength;
@@ -420,7 +417,7 @@ export default class VRMCompanionController {
     let targetEyeY = 0;
     if (this._gaze.active) {
       targetEyeX = clamp(this._gaze.tx * 0.28, -0.28, 0.28);
-      targetEyeY = clamp(-this._gaze.ty * 0.20, -0.20, 0.20);
+      targetEyeY = clamp(this._gaze.ty * 0.20, -0.20, 0.20);
     }
     this._eyeX = damp(this._eyeX || 0, targetEyeX, 5.5, dt);
     this._eyeY = damp(this._eyeY || 0, targetEyeY, 5.5, dt);
@@ -487,53 +484,44 @@ export default class VRMCompanionController {
   }
 
   /* ============================================================== *
-   *  LIP-SYNC  — band-split RMS -> viseme weights w/ smooth decay
+   *  LIP-SYNC  — Subtle, cute anime mouth movement (clamped to 0.35)
    * ============================================================== */
   _applyLipSync(dt) {
     const A = this._audio;
-    let aa = 0, ih = 0, ou = 0, ee = 0, oh = 0;
+    let targetOpen = 0;
 
     if (A.enabled && A.analyser) {
       A.analyser.getByteFrequencyData(A.data);
       const n = A.data.length;
 
-      // split spectrum into rough formant-ish bands
-      const band = (lo, hi) => {
-        let s = 0, c = 0;
-        const a = Math.floor(n * lo), b = Math.floor(n * hi);
-        for (let i = a; i < b; i++) { s += A.data[i]; c++; }
-        return c ? s / c / 255 : 0;
-      };
-      const low  = band(0.00, 0.06); // openness / "aa","oh"
-      const mid  = band(0.06, 0.18); // "ou","oh"
-      const high = band(0.18, 0.45); // "ih","ee"
+      // Vocal formant frequency band (approx 120Hz to 2400Hz)
+      let sum = 0, count = 0;
+      const startBin = Math.floor(n * 0.02);
+      const endBin   = Math.floor(n * 0.28);
+      for (let i = startBin; i < endBin; i++) {
+        sum += A.data[i];
+        count++;
+      }
+      const rawEnergy = count > 0 ? (sum / count) / 255 : 0;
 
-      const g = this.cfg.lipSyncGain;
-      const energy = clamp((low + mid + high) * g, 0, 1);
-
-      // only shape mouth when there's real signal (kills idle jitter)
-      if (energy > 0.06) {
-        aa = clamp(low * 1.8 * g, 0, 1) * energy;
-        oh = clamp(mid * 1.4 * g, 0, 1) * energy;
-        ou = clamp(mid * 1.1 * g, 0, 1) * energy * 0.7;
-        ih = clamp(high * 1.5 * g, 0, 1) * energy;
-        ee = clamp(high * 1.2 * g, 0, 1) * energy * 0.8;
+      // Gate background noise & softly scale
+      if (rawEnergy > 0.05) {
+        // Clamp maximum mouth openness to 0.35 so mouth never gapes open or stretches
+        targetOpen = clamp((rawEnergy - 0.05) * 1.5, 0, 0.35);
       }
     }
 
-    // smooth decay so the mouth never snaps shut / chatters
-    const k = this.cfg.lipSyncDecay;
-    this._viseme.aa = damp(this._viseme.aa, aa, k, dt);
-    this._viseme.ih = damp(this._viseme.ih, ih, k, dt);
-    this._viseme.ou = damp(this._viseme.ou, ou, k, dt);
-    this._viseme.ee = damp(this._viseme.ee, ee, k, dt);
-    this._viseme.oh = damp(this._viseme.oh, oh, k, dt);
+    // Smooth responsive damping
+    const k = 14.0;
+    this._viseme.aa = damp(this._viseme.aa, targetOpen, k, dt);
+    this._viseme.oh = damp(this._viseme.oh, targetOpen * 0.25, k, dt);
 
+    // Drive cute anime mouth opening
     this._setExpr('aa', this._viseme.aa);
-    this._setExpr('ih', this._viseme.ih);
-    this._setExpr('ou', this._viseme.ou);
-    this._setExpr('ee', this._viseme.ee);
     this._setExpr('oh', this._viseme.oh);
+    this._setExpr('ih', 0);
+    this._setExpr('ou', 0);
+    this._setExpr('ee', 0);
   }
 
   /* ============================================================== *
