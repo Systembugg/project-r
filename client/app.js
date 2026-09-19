@@ -12,6 +12,45 @@ const sendBtn = document.getElementById('send-btn');
 const micBtn = document.getElementById('mic-btn');
 const voiceOrb = document.getElementById('voice-orb');
 const orbStatus = document.getElementById('orb-status');
+const voiceSelect = document.getElementById('voice-select');
+
+// Fetch and populate available voices
+async function loadVoices() {
+  try {
+    const res = await fetch('/api/voices');
+    const data = await res.json();
+    if (data.voices && voiceSelect) {
+      voiceSelect.innerHTML = '';
+      data.voices.forEach((v) => {
+        const opt = document.createElement('option');
+        opt.value = v.id;
+        opt.textContent = v.name;
+        if (v.id === data.active) opt.selected = true;
+        voiceSelect.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error('Failed to load voices:', err);
+  }
+}
+
+if (voiceSelect) {
+  voiceSelect.addEventListener('change', async () => {
+    const newVoice = voiceSelect.value;
+    try {
+      await fetch('/api/set_voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice_id: newVoice })
+      });
+      console.log('Voice switched to:', newVoice);
+    } catch (err) {
+      console.error('Failed to switch voice:', err);
+    }
+  });
+}
+
+loadVoices();
 
 function setOrbState(state, text) {
   voiceOrb.className = 'voice-orb ' + (state || '');
@@ -80,10 +119,11 @@ async function sendMessage() {
   setOrbState('speaking', 'Riko is thinking...');
 
   try {
+    const activeVoice = voiceSelect ? voiceSelect.value : undefined;
     const res = await fetch('/api/text_chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
+      body: JSON.stringify({ message: text, voice_id: activeVoice })
     });
     const data = await res.json();
 
@@ -125,6 +165,9 @@ micBtn.addEventListener('click', async () => {
         const blob = new Blob(audioChunks, { type: 'audio/wav' });
         const form = new FormData();
         form.append('audio_file', blob, 'mic.wav');
+        if (voiceSelect && voiceSelect.value) {
+          form.append('voice_id', voiceSelect.value);
+        }
 
         try {
           const res = await fetch('/api/chat', { method: 'POST', body: form });

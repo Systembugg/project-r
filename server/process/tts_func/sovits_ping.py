@@ -42,19 +42,60 @@ async def _edge_tts_fallback(text, output_path):
         temp_mp3.unlink()
 
 
-async def async_sovits_gen(in_text, output_wav_pth="output.wav"):
+def get_char_config():
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+current_voice_id = char_config.get("default_voice", "riko")
+
+def get_available_voices():
+    cfg = get_char_config()
+    voices = cfg.get("voices", {})
+    return {
+        "active": current_voice_id,
+        "voices": [
+            {"id": k, "name": v.get("name", k)}
+            for k, v in voices.items()
+        ]
+    }
+
+def set_active_voice(voice_id: str):
+    global current_voice_id
+    cfg = get_char_config()
+    if voice_id in cfg.get("voices", {}):
+        current_voice_id = voice_id
+        return True
+    return False
+
+
+async def async_sovits_gen(in_text, output_wav_pth="output.wav", voice_id=None):
     if not in_text or not in_text.strip():
         return None
 
-    ref_audio_rel = char_config["sovits_ping_config"]["ref_audio_path"]
+    cfg = get_char_config()
+    target_voice_id = voice_id or current_voice_id
+    voices = cfg.get("voices", {})
+    
+    if target_voice_id in voices:
+        v_conf = voices[target_voice_id]
+        ref_audio_rel = v_conf["ref_audio_path"]
+        prompt_text = v_conf.get("prompt_text", "")
+        text_lang = v_conf.get("text_lang", "en")
+        prompt_lang = v_conf.get("prompt_lang", "en")
+    else:
+        ref_audio_rel = cfg["sovits_ping_config"]["ref_audio_path"]
+        prompt_text = cfg["sovits_ping_config"].get("prompt_text", "")
+        text_lang = cfg["sovits_ping_config"].get("text_lang", "en")
+        prompt_lang = cfg["sovits_ping_config"].get("prompt_lang", "en")
+
     ref_audio_abs = BASE_DIR / ref_audio_rel
 
     payload = {
         "text": in_text,
-        "text_lang": char_config["sovits_ping_config"].get("text_lang", "en"),
+        "text_lang": text_lang,
         "ref_audio_path": str(ref_audio_abs),
-        "prompt_text": char_config["sovits_ping_config"].get("prompt_text", ""),
-        "prompt_lang": char_config["sovits_ping_config"].get("prompt_lang", "en"),
+        "prompt_text": prompt_text,
+        "prompt_lang": prompt_lang,
     }
 
     # 1. Try local GPT-SoVITS if running
@@ -63,7 +104,7 @@ async def async_sovits_gen(in_text, output_wav_pth="output.wav"):
         if response.status_code == 200:
             with open(output_wav_pth, "wb") as f:
                 f.write(response.content)
-            print(f"[TTS] Generated audio via local GPT-SoVITS! ({len(response.content)} bytes)")
+            print(f"[TTS] Generated audio via local GPT-SoVITS using voice '{target_voice_id}'! ({len(response.content)} bytes)")
             return output_wav_pth
         else:
             print(f"[TTS] GPT-SoVITS returned status {response.status_code}: {response.text[:100]}")
@@ -79,7 +120,7 @@ async def async_sovits_gen(in_text, output_wav_pth="output.wav"):
         return None
 
 
-def sovits_gen(in_text, output_wav_pth="output.wav"):
+def sovits_gen(in_text, output_wav_pth="output.wav", voice_id=None):
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -88,10 +129,10 @@ def sovits_gen(in_text, output_wav_pth="output.wav"):
     if loop and loop.is_running():
         # Running inside an existing event loop (e.g. FastAPI / Uvicorn)
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(lambda: asyncio.run(async_sovits_gen(in_text, output_wav_pth)))
+            future = pool.submit(lambda: asyncio.run(async_sovits_gen(in_text, output_wav_pth, voice_id)))
             return future.result()
     else:
-        return asyncio.run(async_sovits_gen(in_text, output_wav_pth))
+        return asyncio.run(async_sovits_gen(in_text, output_wav_pth, voice_id))
 
 
 if __name__ == "__main__":

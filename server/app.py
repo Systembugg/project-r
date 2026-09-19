@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from faster_whisper import WhisperModel
 from process.llm_funcs.llm_scr import llm_response
-from process.tts_func.sovits_ping import sovits_gen
+from process.tts_func.sovits_ping import sovits_gen, get_available_voices, set_active_voice
 
 app = FastAPI(title="Riko 3D Companion Backend")
 
@@ -44,9 +44,24 @@ def get_whisper():
     return _whisper_model
 
 
-
 class TextChatRequest(BaseModel):
     message: str
+    voice_id: str | None = None
+
+
+class SetVoiceRequest(BaseModel):
+    voice_id: str
+
+
+@app.get("/api/voices")
+async def list_voices():
+    return get_available_voices()
+
+
+@app.post("/api/set_voice")
+async def change_voice(req: SetVoiceRequest):
+    success = set_active_voice(req.voice_id)
+    return {"success": success, "active": req.voice_id}
 
 
 @app.post("/api/text_chat")
@@ -64,7 +79,7 @@ async def text_chat(req: TextChatRequest):
     audio_filename = f"output_{uid}.wav"
     output_path = AUDIO_DIR / audio_filename
 
-    gen_path = sovits_gen(reply, str(output_path))
+    gen_path = sovits_gen(reply, str(output_path), voice_id=req.voice_id)
     audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
 
     return {
@@ -75,7 +90,7 @@ async def text_chat(req: TextChatRequest):
 
 
 @app.post("/api/chat")
-async def voice_chat(audio_file: UploadFile = File(...)):
+async def voice_chat(audio_file: UploadFile = File(...), voice_id: str = None):
     # Save incoming audio
     temp_input = AUDIO_DIR / f"temp_input_{uuid.uuid4().hex}.wav"
     with open(temp_input, "wb") as buffer:
@@ -89,7 +104,7 @@ async def voice_chat(audio_file: UploadFile = File(...)):
         temp_input.unlink()
 
     if not user_text:
-        return {"user_text": "", "reply": "I couldn't hear you clearly, senpai!", "audio_url": None}
+        return {"user_text": "", "reply": "I couldn't hear you clearly, genius!", "audio_url": None}
 
     print(f"[Transcribed Speech]: {user_text}")
     reply = llm_response(user_text)
@@ -100,7 +115,7 @@ async def voice_chat(audio_file: UploadFile = File(...)):
     audio_filename = f"output_{uid}.wav"
     output_path = AUDIO_DIR / audio_filename
 
-    gen_path = sovits_gen(reply, str(output_path))
+    gen_path = sovits_gen(reply, str(output_path), voice_id=voice_id)
     audio_url = f"/audio/{audio_filename}" if gen_path and Path(gen_path).exists() else None
 
     return {

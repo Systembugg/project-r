@@ -59,6 +59,42 @@
       color: #c084fc;
       border: 1px solid rgba(168, 85, 247, 0.25);
     }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .voice-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .voice-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .voice-dropdown {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      color: #f3f4f6;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .voice-dropdown:hover, .voice-dropdown:focus {
+      border-color: rgba(168, 85, 247, 0.8);
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+    }
+    .voice-dropdown option {
+      background: #0f172a;
+      color: #f3f4f6;
+    }
     .status-tag {
       font-size: 13px;
       color: #9ca3af;
@@ -263,7 +299,13 @@
       <span class="brand-title">Riko AI</span>
       <span class="badge">Voice & Text</span>
     </div>
-    <div class="status-tag" id="status-tag">Online</div>
+    <div class="header-controls">
+      <div class="voice-picker">
+        <label for="voice-select" class="voice-label">Voice:</label>
+        <select id="voice-select" class="voice-dropdown"></select>
+      </div>
+      <div class="status-tag" id="status-tag">Online</div>
+    </div>
   </header>
 
   <!-- Main Area -->
@@ -307,6 +349,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

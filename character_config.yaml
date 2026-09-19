@@ -27,6 +27,27 @@ presets:
       - "I only have so many nice things to say about you before my code throws an error."
       - "Mute myself? Oh, wait... you'd miss me too much."
       - "It's not like I like you or anything... I just really like your wallet."
+default_voice: riko
+
+voices:
+  riko:
+    name: "Riko (Rayen's Sassy Rival)"
+    text_lang: en
+    prompt_lang: en
+    ref_audio_path: character_files/slices/riko_clean_vocal.wav
+    prompt_text: "Just finally, I was starting to worry my flamethrower would get cold. Bring on the tragic bios."
+  juxtopposed_raw:
+    name: "Juxtopposed (Natural Voice)"
+    text_lang: en
+    prompt_lang: en
+    ref_audio_path: character_files/slices/juxtopposed_raw.wav
+    prompt_text: "Pretty much since I opened my eyes as a human. Windows 98, XP, 7, 8, 10, and 11."
+  juxtopposed_clean:
+    name: "Juxtopposed (Studio Clean)"
+    text_lang: en
+    prompt_lang: en
+    ref_audio_path: character_files/slices/juxtopposed_clean.wav
+    prompt_text: "Pretty much since I opened my eyes as a human. Windows 98, XP, 7, 8, 10, and 11."
 
 sovits_ping_config:
   text_lang: en
